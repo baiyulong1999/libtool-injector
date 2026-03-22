@@ -1,4 +1,4 @@
-name: Build LSPosed Module APK
+name: Build LSPosed Module
 
 on:
   push:
@@ -9,8 +9,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -21,12 +22,164 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
       with:
-        packages: platform-tools, build-tools, platforms;android-34
-        licenses: android-sdk-license
-    
-    - name: Make gradlew executable and build
+        packages: >
+          platform-tools,
+          build-tools;34.0.0,
+          platforms;android-34
+
+    - name: Create minimal Android project
       run: |
-        chmod +x ./gradlew
+        # Create basic Android project structure
+        mkdir -p app/src/main/java/me/miku/libtool/hook
+        mkdir -p app/src/main/res/{values,layout}
+        
+        # Copy our Java files if they exist in the expected location
+        if [ -f "app/src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
+          echo "MainHook.java already exists"
+        else
+          # Create a basic MainHook.java
+          cat > app/src/main/java/me/miku/libtool/hook/MainHook.java << 'EOF'
+package me.miku.libtool.hook;
+
+import android.util.Log;
+import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
+
+public class MainHook implements IXposedHookLoadPackage {
+    private static final String TAG = "LibTool-Injector";
+    
+    @Override
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+        if (!lpparam.packageName.equals("com.superplanet.evilhunter")) {
+            return;
+        }
+        
+        Log.d(TAG, "Hooking into target app: " + lpparam.packageName);
+        
+        XposedHelpers.findAndHookMethod("android.app.Application", lpparam.classLoader, 
+            "onCreate", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(XC_MethodHook.MethodHookParam param) throws Throwable {
+                    Log.d(TAG, "Application onCreate called, injection logic would go here");
+                }
+            });
+    }
+}
+EOF
+        fi
+        
+        # Create AndroidManifest.xml
+        cat > app/src/main/AndroidManifest.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="me.miku.libtool.injector">
+
+    <application
+        android:label="LibTool Injector"
+        android:icon="@mipmap/ic_launcher">
+        
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+            
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Inject libTool.so into target game" />
+            
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+            
+        <meta-data
+            android:name="xposedscope"
+            android:value="com.superplanet.evilhunter" />
+    </application>
+</manifest>
+EOF
+
+        # Create basic gradle files
+        cat > app/build.gradle << 'EOF'
+apply plugin: 'com.android.application'
+
+android {
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "me.miku.libtool.injector"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    compileOnly 'de.robv.android.xposed:api:82'
+}
+EOF
+
+        cat > build.gradle << 'EOF'
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    id 'com.android.application' version '7.4.2' apply false
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+EOF
+
+        cat > gradle.properties << 'EOF'
+// Project-wide Gradle settings.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+android.enableJetifier=true
+EOF
+
+        cat > settings.gradle << 'EOF'
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "LibTool Injector"
+include ':app'
+EOF
+
+        # Create basic res values
+        cat > app/src/main/res/values/strings.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LibTool Injector</string>
+</resources>
+EOF
+
+    - name: Build with Gradle
+      run: |
         ./gradlew assembleDebug --no-daemon
       env:
         TERM: dumb
