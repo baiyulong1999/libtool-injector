@@ -1,0 +1,60 @@
+# Built application files
+*.apk
+*.aar
+*.jar
+*.so
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Android Studio Generated Files
+.gradle/
+build/
+.intermediates/
+.profile/
+
+# Version control
+.svn/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local configuration property files
+local.properties
+gradle.properties
+gradlew*
+!gradlew.bat
+
+# Android profiling
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.log
+
+# Xposed
+.cache/
+
+# Temporary files
+tmp/
+temp/
+.vscode/
+*.tmp
+*.bak
+*.swp
+
+# Personal files
+libTool.so
