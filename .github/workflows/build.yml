@@ -31,52 +31,88 @@ jobs:
         mkdir -p ~/.gradle
         echo "android.debug.keystore=${PWD}/debug.keystore" > ~/.gradle/gradle.properties
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew || echo "No gradlew file found"
-
-    - name: Build Debug APK
+    - name: Create standard Android project structure
       run: |
-        # Install dependencies if build.gradle exists
-        if [ -f "build.gradle" ]; then
-          echo "Found root build.gradle, checking app/build.gradle..."
-          if [ -f "app/build.gradle" ]; then
-            echo "Found app/build.gradle, building with Gradle..."
-            export ANDROID_HOME=$ANDROID_SDK_ROOT
-            ./gradlew assembleDebug --stacktrace
+        mkdir -p app/src/main/java/me/miku/libtool/hook
+        mkdir -p app/src/main/res/values
+        mkdir -p app/src/main/res/layout
+
+    - name: Copy Java source files
+      run: |
+        if [ -f "src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
+          cp -r src/main/java/me/miku/libtool/hook/* app/src/main/java/me/miku/libtool/hook/
+        else
+          echo "Java files not found in expected location, checking alternative location..."
+          if [ -f "app/src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
+            echo "Java files already in correct location"
           else
-            echo "Creating app/build.gradle from template..."
-            mkdir -p app/src/main/java/me/miku/libtool/hook
-            mkdir -p app/src/main/res/values
-            mkdir -p app/src/main/res/layout
-            
-            # Create basic strings.xml
-            cat > app/src/main/res/values/strings.xml << 'EOF1'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">LibTool Injector</string>
-</resources>
-EOF1
-            
-            # Create basic layout file
-            cat > app/src/main/res/layout/activity_main.xml << 'EOF2'
+            echo "Error: MainHook.java not found!"
+            find . -name "*.java" -type f
+            exit 1
+          fi
+        fi
+
+    - name: Create basic layout file
+      run: |
+        cat > app/src/main/res/layout/activity_main.xml << 'EOL'
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 </LinearLayout>
-EOF2
-            
-            # Create basic MainActivity
-            cat > app/src/main/java/MainActivity.java << 'EOF3'
-import androidx.appcompat.app.AppCompatActivity;
+EOL
 
-public class MainActivity extends AppCompatActivity {
-    // Empty activity for Xposed module
-}
-EOF3
+    - name: Create strings.xml
+      run: |
+        cat > app/src/main/res/values/strings.xml << 'EOL'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LibTool Injector</string>
+</resources>
+EOL
+
+    - name: Create AndroidManifest.xml
+      run: |
+        cat > app/src/main/AndroidManifest.xml << 'EOL'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="me.miku.libtool.injector">
+
+    <application
+        android:label="LibTool Injector"
+        android:icon="@mipmap/ic_launcher">
+        
+        <activity
+            android:name="androidx.appcompat.app.AppCompatActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
             
-            # Create proper app/build.gradle
-            cat > app/build.gradle << 'EOF4'
+        <meta-data
+            android:name="xposeddescription"
+            android:value="Inject libTool.so into target game" />
+            
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+            
+        <meta-data
+            android:name="xposedscope"
+            android:value="com.superplanet.evilhunter" />
+    </application>
+</manifest>
+EOL
+
+    - name: Create app-level build.gradle
+      run: |
+        cat > app/build.gradle << 'EOL'
 apply plugin: 'com.android.application'
 
 android {
@@ -115,49 +151,11 @@ dependencies {
     compileOnly 'de.robv.android.xposed:api:82'
     compileOnly 'de.robv.android.xposed:api:82:sources'
 }
-EOF4
-            
-            # Create proper AndroidManifest.xml
-            cat > app/src/main/AndroidManifest.xml << 'EOF5'
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="me.miku.libtool.injector">
+EOL
 
-    <application
-        android:label="LibTool Injector"
-        android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
-        
-        <activity
-            android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        
-        <meta-data
-            android:name="xposedmodule"
-            android:value="true" />
-            
-        <meta-data
-            android:name="xposeddescription"
-            android:value="Inject libTool.so into target game" />
-            
-        <meta-data
-            android:name="xposedminversion"
-            android:value="93" />
-            
-        <meta-data
-            android:name="xposedscope"
-            android:value="com.superplanet.evilhunter" />
-    </application>
-</manifest>
-EOF5
-            
-            # Create root build.gradle if it doesn't exist
-            if [ ! -f "build.gradle" ]; then
-              cat > build.gradle << 'EOF6'
+    - name: Create root build.gradle
+      run: |
+        cat > build.gradle << 'EOL'
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
     id 'com.android.application' version '7.4.2' apply false
@@ -167,22 +165,20 @@ plugins {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
-EOF6
-            fi
-            
-            # Create gradle.properties if it doesn't exist
-            if [ ! -f "gradle.properties" ]; then
-              cat > gradle.properties << 'EOF7'
+EOL
+
+    - name: Create gradle.properties
+      run: |
+        cat > gradle.properties << 'EOL'
 // Project-wide Gradle settings.
 org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
 android.useAndroidX=true
 android.enableJetifier=true
-EOF7
-            fi
-            
-            # Create settings.gradle if it doesn't exist
-            if [ ! -f "settings.gradle" ]; then
-              cat > settings.gradle << 'EOF8'
+EOL
+
+    - name: Create settings.gradle
+      run: |
+        cat > settings.gradle << 'EOL'
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -201,70 +197,15 @@ dependencyResolutionManagement {
 }
 rootProject.name = "LibTool Injector"
 include ':app'
-EOF8
-            fi
-            
-            # Now build the project
-            export ANDROID_HOME=$ANDROID_SDK_ROOT
-            ./gradlew assembleDebug --stacktrace
-          fi
-        else
-          echo "No build.gradle found, creating basic project structure..."
-          mkdir -p app/src/main/java/me/miku/libtool/hook
-          
-          # Copy our Java files
-          if [ -f "src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
-            cp -r src/main/java/me/miku/libtool/hook/* app/src/main/java/me/miku/libtool/hook/
-          elif [ -f "app/src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
-            echo "Java files already in place"
-          else
-            echo "Error: MainHook.java not found in expected locations"
-            ls -la
-            exit 1
-          fi
-          
-          # Ensure the proper AndroidManifest.xml is in place
-          cat > app/src/main/AndroidManifest.xml << 'EOF9'
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="me.miku.libtool.injector">
+EOL
 
-    <application
-        android:label="LibTool Injector"
-        android:icon="@mipmap/ic_launcher">
-        
-        <activity
-            android:name="androidx.appcompat.app.AppCompatActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-        
-        <meta-data
-            android:name="xposedmodule"
-            android:value="true" />
-            
-        <meta-data
-            android:name="xposeddescription"
-            android:value="Inject libTool.so into target game" />
-            
-        <meta-data
-            android:name="xposedminversion"
-            android:value="93" />
-            
-        <meta-data
-            android:name="xposedscope"
-            android:value="com.superplanet.evilhunter" />
-    </application>
-</manifest>
-EOF9
-          
-          # Build the project
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          ./gradlew assembleDebug --stacktrace
-        fi
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew || echo "No gradlew file found, proceeding anyway..."
+
+    - name: Build Debug APK
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        ./gradlew assembleDebug --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v3
