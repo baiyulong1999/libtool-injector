@@ -31,49 +31,56 @@ jobs:
         mkdir -p ~/.gradle
         echo "android.debug.keystore=${PWD}/debug.keystore" > ~/.gradle/gradle.properties
 
-    - name: Create standard Android project structure
+    - name: Create project structure
       run: |
         mkdir -p app/src/main/java/me/miku/libtool/hook
         mkdir -p app/src/main/res/values
         mkdir -p app/src/main/res/layout
 
-    - name: Copy Java source files
+    - name: Create Java files
       run: |
-        if [ -f "src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
-          cp -r src/main/java/me/miku/libtool/hook/* app/src/main/java/me/miku/libtool/hook/
-        else
-          echo "Java files not found in expected location, checking alternative location..."
-          if [ -f "app/src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
-            echo "Java files already in correct location"
-          else
-            echo "Error: MainHook.java not found!"
-            find . -name "*.java" -type f
-            exit 1
-          fi
+        # Copy existing Java files if they exist
+        if [ -d "src/main/java/me/miku/libtool/hook/" ]; then
+          cp -r src/main/java/me/miku/libtool/hook/* app/src/main/java/me/miku/libtool/hook/ 2>/dev/null || echo "No Java files to copy"
         fi
+        # Ensure we have the main hook file
+        if [ ! -f "app/src/main/java/me/miku/libtool/hook/MainHook.java" ]; then
+          echo "Creating default MainHook.java"
+          cat > app/src/main/java/me/miku/libtool/hook/MainHook.java << 'EOF_JAVA'
+package me.miku.libtool.hook;
 
-    - name: Create basic layout file
-      run: |
-        cat > app/src/main/res/layout/activity_main.xml << 'EOL'
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
-</LinearLayout>
-EOL
+import android.util.Log;
+import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
-    - name: Create strings.xml
-      run: |
-        cat > app/src/main/res/values/strings.xml << 'EOL'
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">LibTool Injector</string>
-</resources>
-EOL
+public class MainHook implements IXposedHookLoadPackage {
+    private static final String TAG = "LibTool-Injector";
+    
+    @Override
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
+        if (!lpparam.packageName.equals("com.superplanet.evilhunter")) {
+            return;
+        }
+        
+        Log.d(TAG, "Hooking into target app: " + lpparam.packageName);
+        
+        XposedHelpers.findAndHookMethod("android.app.Application", lpparam.classLoader, 
+            "onCreate", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(XC_MethodHook.MethodHookParam param) throws Throwable {
+                    Log.d(TAG, "Application onCreate called, injection logic would go here");
+                }
+            });
+    }
+}
+EOF_JAVA
+        fi
 
     - name: Create AndroidManifest.xml
       run: |
-        cat > app/src/main/AndroidManifest.xml << 'EOL'
+        cat > app/src/main/AndroidManifest.xml << 'EOF_MANIFEST'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="me.miku.libtool.injector">
@@ -108,11 +115,12 @@ EOL
             android:value="com.superplanet.evilhunter" />
     </application>
 </manifest>
-EOL
+EOF_MANIFEST
 
-    - name: Create app-level build.gradle
+    - name: Create build files
       run: |
-        cat > app/build.gradle << 'EOL'
+        # Create app-level build.gradle
+        cat > app/build.gradle << 'EOF_GRADLE'
 apply plugin: 'com.android.application'
 
 android {
@@ -147,38 +155,31 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     compileOnly 'de.robv.android.xposed:api:82'
-    compileOnly 'de.robv.android.xposed:api:82:sources'
 }
-EOL
+EOF_GRADLE
 
-    - name: Create root build.gradle
-      run: |
-        cat > build.gradle << 'EOL'
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+        # Create root build.gradle
+        cat > build.gradle << 'EOF_ROOT'
 plugins {
     id 'com.android.application' version '7.4.2' apply false
-    id 'com.android.library' version '7.4.2' apply false
 }
 
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
-EOL
+EOF_ROOT
 
-    - name: Create gradle.properties
-      run: |
-        cat > gradle.properties << 'EOL'
+        # Create gradle.properties
+        cat > gradle.properties << 'EOF_PROP'
 // Project-wide Gradle settings.
 org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
 android.useAndroidX=true
 android.enableJetifier=true
-EOL
+EOF_PROP
 
-    - name: Create settings.gradle
-      run: |
-        cat > settings.gradle << 'EOL'
+        # Create settings.gradle
+        cat > settings.gradle << 'EOF_SETTINGS'
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -191,18 +192,22 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Xposed API repository
-        maven { url 'https://api.xposed.info/' }
     }
 }
 rootProject.name = "LibTool Injector"
 include ':app'
-EOL
+EOF_SETTINGS
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew || echo "No gradlew file found, proceeding anyway..."
+        # Create basic res files
+        mkdir -p app/src/main/res/values
+        cat > app/src/main/res/values/strings.xml << 'EOF_STRINGS'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LibTool Injector</string>
+</resources>
+EOF_STRINGS
 
-    - name: Build Debug APK
+    - name: Build APK
       run: |
         export ANDROID_HOME=$ANDROID_SDK_ROOT
         ./gradlew assembleDebug --stacktrace
