@@ -1,4 +1,4 @@
-name: Build LSPosed Module
+name: Build LSPosed Module APK
 
 on:
   push:
@@ -22,19 +22,20 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
       with:
-        packages: >
-          platform-tools,
-          build-tools;34.0.0,
-          platforms;android-34
+        packages: build-tools;34.0.0, platform-tools, platforms;android-34
 
-    - name: Create minimal Android project
+    - name: Accept Android licenses
       run: |
-        # Create basic Android project structure
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
+    - name: Create basic Android project structure
+      run: |
+        # Create directory structure
         mkdir -p app/src/main/java/me/miku/libtool/hook
-        mkdir -p app/src/main/res/{values,layout}
-        
-        # Create a basic MainHook.java
-        cat > app/src/main/java/me/miku/libtool/hook/MainHook.java << 'MAINHOOK_EOF'
+        mkdir -p app/src/main/res/values
+
+        # Create MainHook.java
+        cat > app/src/main/java/me/miku/libtool/hook/MainHook.java << 'EOF'
 package me.miku.libtool.hook;
 
 import android.util.Log;
@@ -63,17 +64,16 @@ public class MainHook implements IXposedHookLoadPackage {
             });
     }
 }
-MAINHOOK_EOF
-        
+EOF
+
         # Create AndroidManifest.xml
-        cat > app/src/main/AndroidManifest.xml << 'MANIFEST_EOF'
+        cat > app/src/main/AndroidManifest.xml << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="me.miku.libtool.injector">
 
     <application
-        android:label="LibTool Injector"
-        android:icon="@mipmap/ic_launcher">
+        android:label="LibTool Injector">
         
         <meta-data
             android:name="xposedmodule"
@@ -92,10 +92,10 @@ MAINHOOK_EOF
             android:value="com.superplanet.evilhunter" />
     </application>
 </manifest>
-MANIFEST_EOF
+EOF
 
-        # Create basic gradle files
-        cat > app/build.gradle << 'GRADLE_APP_EOF'
+        # Create build.gradle for app
+        cat > app/build.gradle << 'EOF'
 apply plugin: 'com.android.application'
 
 android {
@@ -107,8 +107,6 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -126,27 +124,41 @@ android {
 dependencies {
     compileOnly 'de.robv.android.xposed:api:82'
 }
-GRADLE_APP_EOF
+EOF
 
-        cat > build.gradle << 'GRADLE_ROOT_EOF'
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
-plugins {
-    id 'com.android.application' version '7.4.2' apply false
+        # Create root build.gradle
+        cat > build.gradle << 'EOF'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.4.2'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
-GRADLE_ROOT_EOF
+EOF
 
-        cat > gradle.properties << 'PROPERTIES_EOF'
-// Project-wide Gradle settings.
+        # Create gradle.properties
+        cat > gradle.properties << 'EOF'
 org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
 android.useAndroidX=true
 android.enableJetifier=true
-PROPERTIES_EOF
+EOF
 
-        cat > settings.gradle << 'SETTINGS_EOF'
+        # Create settings.gradle
+        cat > settings.gradle << 'EOF'
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -163,47 +175,33 @@ dependencyResolutionManagement {
 }
 rootProject.name = "LibTool Injector"
 include ':app'
-SETTINGS_EOF
+EOF
 
-        # Create basic res values
-        cat > app/src/main/res/values/strings.xml << 'STRINGS_EOF'
+        # Create basic strings.xml
+        cat > app/src/main/res/values/strings.xml << 'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LibTool Injector</string>
 </resources>
-STRINGS_EOF
+EOF
+
+    - name: Make gradlew executable
+      run: |
+        chmod +x gradlew || echo "gradlew not found, creating basic one"
+        if [ ! -f "gradlew" ]; then
+          touch gradlew
+          chmod +x gradlew
+        fi
 
     - name: Build with Gradle
       run: |
-        ./gradlew assembleDebug --no-daemon
+        ./gradlew assembleDebug --no-daemon --stacktrace
       env:
         TERM: dumb
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: libtool-injector-debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
-        
-    - name: Create dummy keystore for debug build
-      run: |
-        keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-        mkdir -p ~/.gradle
-        echo "android.debug.keystore=${PWD}/debug.keystore" > ~/.gradle/gradle.properties
-
-    - name: Make setup script executable and run it
-      run: |
-        chmod +x scripts/setup_project.sh
-        ./scripts/setup_project.sh
-
-    - name: Build APK
-      run: |
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
-        ./gradlew assembleDebug --stacktrace
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: libtool-injector-debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: warn
