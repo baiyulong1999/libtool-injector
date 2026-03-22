@@ -50,33 +50,33 @@ jobs:
             mkdir -p app/src/main/res/layout
             
             # Create basic strings.xml
-            cat > app/src/main/res/values/strings.xml << EOF
+            cat > app/src/main/res/values/strings.xml << 'EOF1'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">LibTool Injector</string>
 </resources>
-EOF
+EOF1
             
             # Create basic layout file
-            cat > app/src/main/res/layout/activity_main.xml << EOF
+            cat > app/src/main/res/layout/activity_main.xml << 'EOF2'
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 </LinearLayout>
-EOF
+EOF2
             
             # Create basic MainActivity
-            cat > app/src/main/java/MainActivity.java << EOF
+            cat > app/src/main/java/MainActivity.java << 'EOF3'
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
     // Empty activity for Xposed module
 }
-EOF
+EOF3
             
             # Create proper app/build.gradle
-            cat > app/build.gradle << 'EOF'
+            cat > app/build.gradle << 'EOF4'
 apply plugin: 'com.android.application'
 
 android {
@@ -115,10 +115,10 @@ dependencies {
     compileOnly 'de.robv.android.xposed:api:82'
     compileOnly 'de.robv.android.xposed:api:82:sources'
 }
-EOF
+EOF4
             
             # Create proper AndroidManifest.xml
-            cat > app/src/main/AndroidManifest.xml << 'EOF'
+            cat > app/src/main/AndroidManifest.xml << 'EOF5'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="me.miku.libtool.injector">
@@ -153,11 +153,11 @@ EOF
             android:value="com.superplanet.evilhunter" />
     </application>
 </manifest>
-EOF
+EOF5
             
             # Create root build.gradle if it doesn't exist
             if [ ! -f "build.gradle" ]; then
-              cat > build.gradle << 'EOF'
+              cat > build.gradle << 'EOF6'
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 plugins {
     id 'com.android.application' version '7.4.2' apply false
@@ -167,22 +167,22 @@ plugins {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
-EOF
+EOF6
             fi
             
             # Create gradle.properties if it doesn't exist
             if [ ! -f "gradle.properties" ]; then
-              cat > gradle.properties << 'EOF'
+              cat > gradle.properties << 'EOF7'
 // Project-wide Gradle settings.
 org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
 android.useAndroidX=true
 android.enableJetifier=true
-EOF
+EOF7
             fi
             
             # Create settings.gradle if it doesn't exist
             if [ ! -f "settings.gradle" ]; then
-              cat > settings.gradle << 'EOF'
+              cat > settings.gradle << 'EOF8'
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -201,7 +201,7 @@ dependencyResolutionManagement {
 }
 rootProject.name = "LibTool Injector"
 include ':app'
-EOF
+EOF8
             fi
             
             # Now build the project
@@ -224,7 +224,7 @@ EOF
           fi
           
           # Ensure the proper AndroidManifest.xml is in place
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
+          cat > app/src/main/AndroidManifest.xml << 'EOF9'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="me.miku.libtool.injector">
@@ -259,12 +259,11 @@ EOF
             android:value="com.superplanet.evilhunter" />
     </application>
 </manifest>
-EOF
+EOF9
           
           # Build the project
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           ./gradlew assembleDebug --stacktrace
-        fi
         fi
 
     - name: Upload APK
