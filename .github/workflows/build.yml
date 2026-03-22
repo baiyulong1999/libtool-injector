@@ -6,12 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
@@ -24,9 +21,31 @@ jobs:
         cache: gradle
 
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-      with:
-        packages: tools platform-tools build-tools;34.0.0 platforms;android-34
+      run: |
+        # Install Android SDK
+        sudo mkdir -p /opt/android-sdk
+        cd /tmp
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-9477386_latest.zip
+        sudo mv cmdline-tools /opt/android-sdk/
+        sudo chown -R runner:runner /opt/android-sdk/
+        
+        export ANDROID_HOME=/opt/android-sdk
+        export PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin:$ANDROID_HOME/platform-tools
+        
+        # Accept licenses
+        yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager --licenses || true
+        
+        # Install required packages
+        yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager \
+          "platform-tools" \
+          "build-tools;34.0.0" \
+          "platforms;android-34" \
+          "cmdline-tools;latest"
+        
+        echo "ANDROID_HOME=/opt/android-sdk" >> $GITHUB_ENV
+        echo "/opt/android-sdk/cmdline-tools/bin" >> $GITHUB_PATH
+        echo "/opt/android-sdk/platform-tools" >> $GITHUB_PATH
         
     - name: Create dummy keystore for debug build
       run: |
